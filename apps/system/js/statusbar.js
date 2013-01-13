@@ -10,48 +10,78 @@
  */
 
 function AnimatedIcon(element, path, frames, delay) {
-  var context = element.getContext("2d");
-  var image = new Image();
+  var self = this,
+      context = element.getContext('2d'),
+      image = new Image();
 
-  this.frame = 1;
-  this.frames = frames;
-  this.context = context;
-  this.timerId = null;
+	self.initialized = false;
+	self.delay = delay;
+	self.frame = 1;
+	self.frames = frames;
+	self.context = context;
+	self.started = true;
 
-  // Load the image and paint the first frame
-  this.image = image;
-  this.image.src = path;
-  this.image.onload = function() {
-    var w = image.width;
-    var h = image.height / frames;
+	// Load the image and paint the first frame
+	self.image = image;
+	image.src = path;
+	image.onload = function () {
+		var w = image.width;
+		var h = image.height / frames;
+		self.started = false;
 
-    context.drawImage(image, 0, 0, w, h, 0, 0, w, h);
-  }
+		context.drawImage(image, 0, 0, w, h, 0, 0, w, h);
+		self.initialized = true;
 
-  this.start = function() {
-    var self = this;
+		if(self.autostart){
+			self.start();
+			self.autostart = null;
+		}
+	};
 
-    if (this.timerId == null) {
-      this.timerId = setInterval(function() {
-          var w = self.image.width;
-          var h = self.image.height / frames;
+  self.start = function () {
+		var self = this;
 
-          self.context.drawImage(self.image, 0, self.frame * h, w, h, 0, 0, w, h);
-          self.frame++;
+		if(self.started){
+			return;
+		}
 
-          if (self.frame == self.frames) {
-            self.frame = 0;
-          }
-      }, delay);
-    }
-  }
+		if(!self.initialized){
+			self.autostart = true;
+			return;
+		}
 
-  this.stop = function() {
-    if (this.timerId != null) {
-      clearInterval(this.timerId);
-      this.timerId = null;
-    }
-  }
+		self.start = window.mozAnimationStartTime;
+    self.started = true;
+    window.requestAnimationFrame(self.step.bind(self));
+	};
+
+	self.stop = function () {
+		this.autostart = null;
+		this.started = false;
+	};
+
+	self.step = function(timestamp) {
+		var self = this,
+        progress = timestamp - self.start;
+
+		if(progress >= self.delay){
+			var w = self.image.width,
+				h = self.image.height / self.frames;
+
+			self.context.drawImage(self.image, 0, self.frame * h, w, h, 0, 0, w, h);
+			self.frame++;
+
+			if(self.frame == self.frames) {
+				self.frame = 0;
+			}
+
+			self.start = window.mozAnimationStartTime;
+		}
+
+		if(self.started){
+      window.requestAnimationFrame(self.step.bind(self));
+		}
+	};
 }
 
 var StatusBar = {
