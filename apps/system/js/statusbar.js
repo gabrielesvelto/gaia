@@ -3,6 +3,87 @@
 
 'use strict';
 
+/**
+ * Create an animated icon by using a canvas element coupled with a flat image
+ * containing all the animation frames arranged as a vertical row. The delay
+ * between each frame is fixed.
+ */
+
+function AnimatedIcon(element, path, frames, delay) {
+  var self = this,
+      context = element.getContext('2d'),
+      image = new Image();
+
+	self.initialized = false;
+	self.delay = delay;
+	self.frame = 1;
+	self.frames = frames;
+	self.context = context;
+	self.started = true;
+
+	// Load the image and paint the first frame
+	self.image = image;
+	image.src = path;
+	image.onload = function () {
+		var w = image.width;
+		var h = image.height / frames;
+		self.started = false;
+
+		context.drawImage(image, 0, 0, w, h, 0, 0, w, h);
+		self.initialized = true;
+
+		if(self.autostart){
+			self.start();
+			self.autostart = null;
+		}
+	};
+
+  self.start = function () {
+		var self = this;
+
+		if(self.started){
+			return;
+		}
+
+		if(!self.initialized){
+			self.autostart = true;
+			return;
+		}
+
+		self.start = window.mozAnimationStartTime;
+    self.started = true;
+    window.requestAnimationFrame(self.step.bind(self));
+	};
+
+	self.stop = function () {
+		this.autostart = null;
+		this.started = false;
+	};
+
+	self.step = function(timestamp) {
+		var self = this,
+        progress = timestamp - self.start;
+
+		if(progress >= self.delay){
+			var w = self.image.width,
+				h = self.image.height / self.frames;
+
+			self.context.drawImage(self.image, 0, self.frame * h, w, h, 0, 0, w, h);
+			self.frame++;
+
+			if(self.frame == self.frames) {
+				self.frame = 0;
+			}
+
+			self.start = window.mozAnimationStartTime;
+		}
+
+		if(self.started){
+      window.requestAnimationFrame(self.step.bind(self));
+		}
+	};
+}
+
 var StatusBar = {
   /* all elements that are children nodes of the status bar */
   ELEMENTS: ['notification', 'time',
@@ -52,6 +133,10 @@ var StatusBar = {
    * it triggers the icon "systemDownloads"
    */
   systemDownloadsCount: 0,
+
+  /* Objects used to animate the system downloads and network activity canvas elements */
+  networkActivityAnimation: null,
+  systemDownloadsAnimation: null,
 
   /* For other modules to acquire */
   get height() {
@@ -113,6 +198,14 @@ var StatusBar = {
     window.addEventListener('moztimechange', this);
 
     this.systemDownloadsCount = 0;
+
+    // Create the objects used to animate the statusbar-network-activity and
+    // statusbar-system-downloads canvas elements
+    this.networkActivityAnimation = new AnimatedIcon(this.icons.networkActivity,
+      "style/statusbar/images/network-activity-flat.png", 6, 200);
+    this.systemDownloadsAnimation = new AnimatedIcon(this.icons.systemDownloads,
+      "style/statusbar/images/system-downloads-flat.png", 8, 130);
+
     this.setActive(true);
   },
 
@@ -310,11 +403,14 @@ var StatusBar = {
       // show up for 500ms.
 
       var icon = this.icons.networkActivity;
+      var animation = this.networkActivityAnimation;
 
       clearTimeout(this._networkActivityTimer);
       icon.hidden = false;
+      animation.start();
 
       this._networkActivityTimer = setTimeout(function hideNetActivityIcon() {
+        animation.stop();
         icon.hidden = true;
       }, 500);
     },
@@ -529,7 +625,15 @@ var StatusBar = {
 
     systemDownloads: function sb_updatesystemDownloads() {
       var icon = this.icons.systemDownloads;
-      icon.hidden = (this.systemDownloadsCount === 0);
+      var animation = this.systemDownloadsAnimation;
+
+      if (this.systemDownloadsCount > 0) {
+        icon.hidden = false;
+        animation.start();
+      } else {
+        animation.stop();
+        icon.hidden = true;
+      }
     },
 
     callForwarding: function sb_updateCallForwarding() {
