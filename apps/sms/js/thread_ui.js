@@ -183,22 +183,29 @@ var ThreadUI = {
         window.location.hash = '#thread-list';
         return;
       }
-      if (confirm(navigator.mozL10n.get('discard-sms'))) {
+      if (window.confirm(navigator.mozL10n.get('discard-sms'))) {
         ThreadUI.cleanFields(true);
         window.location.hash = '#thread-list';
       }
     };
 
     // We're waiting for the keyboard to disappear before animating back
-    if (ThreadListUI.fullHeight !== this.container.offsetHeight) {
+    if (this.isKeyboardDisplayed()) {
 
       window.addEventListener('resize', function keyboardHidden() {
         window.removeEventListener('resize', keyboardHidden);
+        window.clearTimeout(setTimer);
         goBack();
       });
+      var setTimer = window.setTimeout(goBack, 400);
     } else {
       goBack();
     }
+  },
+
+  isKeyboardDisplayed: function thui_isKeyboardDisplayed() {
+    // minimal keyboard height is 150px
+    return (this.container.offsetHeight < ThreadListUI.fullHeight - 150);
   },
 
   enableSend: function thui_enableSend() {
@@ -218,8 +225,8 @@ var ThreadUI = {
     this.container.scrollTop = this.container.scrollHeight;
   },
 
-  updateCounter: function thui_updateCount(evt) {
-    if (!navigator.mozSms) {
+  updateCounter: function thui_updateCount() {
+    if (!this._mozSms.getSegmentInfoForText) {
       return;
     }
     var value = this.input.value;
@@ -236,7 +243,19 @@ var ThreadUI = {
       counter = availableChars + '/' + segments;
     }
     this.sendButton.dataset.counter = counter;
-    this.sendButton.disabled = (segments > kMaxConcatenatedMessages);
+    var hasMaxLength = (segments === kMaxConcatenatedMessages &&
+        !availableChars);
+
+    // note: when we'll have the MMS feature, we'll want to use an MMS instead
+    // of forbidding this.
+    if (hasMaxLength) {
+      var message = navigator.mozL10n.get('messages-max-length-notice');
+      window.alert(message);
+
+      this.input.setAttribute('maxlength', value.length);
+    } else {
+      this.input.removeAttribute('maxlength');
+    }
   },
 
   updateInputHeight: function thui_updateInputHeight() {
@@ -375,11 +394,13 @@ var ThreadUI = {
   },
   // Method for updating the header with the info retrieved from Contacts API
   updateHeaderData: function thui_updateHeaderData(callback) {
+
     // For Desktop Testing, mozContacts it's mockuped but it's not working
     // completely. So in the case of Desktop testing we are going to execute
     // the callback directly in order to make it works!
     // https://bugzilla.mozilla.org/show_bug.cgi?id=836733
     if (!navigator.mozSms && callback) {
+      this.headerText.textContent = MessageManager.currentNum;
       setTimeout(callback);
       return;
     }
@@ -392,7 +413,7 @@ var ThreadUI = {
     // Add data to contact activity interaction
     this.headerText.dataset.phoneNumber = number;
 
-    Contacts.findByString(number, function gotContact(contacts) {
+    Contacts.findByPhoneNumber(number, function gotContact(contacts) {
       var carrierTag = document.getElementById('contact-carrier');
       /** If we have more than one contact sharing the same phone number
        *  we show the name of the first contact and how many other contacts
@@ -591,6 +612,9 @@ var ThreadUI = {
         messageContainer.appendChild(messageDOM);
       }
     }
+
+    if (document.getElementById('main-wrapper').classList.contains('edit'))
+      this.checkInputs();
   },
 
   showChunkOfMessages: function thui_showChunkOfMessages(number) {
@@ -605,7 +629,7 @@ var ThreadUI = {
     aElement.addEventListener('click', function resend(e) {
       var hash = window.location.hash;
       if (hash != '#edit') {
-        if (confirm(navigator.mozL10n.get('resend-confirmation'))) {
+        if (window.confirm(navigator.mozL10n.get('resend-confirmation'))) {
           messageDOM.removeEventListener('click', resend);
           ThreadUI.resendMessage(message, messageDOM);
         }
@@ -647,7 +671,7 @@ var ThreadUI = {
 
   delete: function thui_delete() {
     var question = navigator.mozL10n.get('deleteMessages-confirmation');
-    if (confirm(question)) {
+    if (window.confirm(question)) {
       WaitingScreen.show();
       var delNumList = [];
       var inputs = ThreadUI.container.querySelectorAll(
@@ -912,7 +936,17 @@ var ThreadUI = {
     ThreadUI.sendMessage(message.body);
   },
 
+
+  // Returns true when a contact has been rendered
+  // Returns false when no contact has been rendered
   renderContact: function thui_renderContact(contact) {
+    // Contact records that don't have phone numbers
+    // cannot be sent SMS or MMS messages
+    // TODO: Add email checking support for MMS
+    if (contact.tel === null) {
+      return false;
+    }
+
     var input = this.recipient.value.trim();
     var escaped = Utils.escapeRegex(input);
     var escsubs = escaped.split(/\s+/);
@@ -964,6 +998,8 @@ var ThreadUI = {
     }
 
     ThreadUI.container.appendChild(contactsUl);
+
+    return true;
   },
 
   searchContact: function thui_searchContact() {
@@ -1057,6 +1093,8 @@ var ThreadUI = {
     }
   }
 };
+
+window.confirm = window.confirm; // allow override in unit tests
 
 window.addEventListener('resize', function resize() {
   ThreadUI.setInputMaxHeight();

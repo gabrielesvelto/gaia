@@ -308,6 +308,50 @@ var WindowManager = (function() {
     setDisplayedApp(homescreen);
   });
 
+  // Open and close app animations
+  windows.addEventListener('animationend', function frameAnimationend(evt) {
+    var animationName = evt.animationName;
+    var frame = evt.target;
+
+    if (animationName.indexOf('openApp') !== -1) {
+      windowScaled(frame);
+
+      var onWindowReady = function() {
+        windowOpened(frame);
+
+        setTimeout(openCallback);
+        openCallback = null;
+        setOpenFrame(null);
+
+        ensureHomescreen().classList.remove('zoom-in');
+      };
+
+      // If this is a cold launch let's wait for the app to load first
+      var iframe = openFrame.firstChild;
+      if ('unpainted' in iframe.dataset) {
+
+        if ('wrapper' in frame.dataset)
+          wrapperFooter.classList.add('visible');
+
+        iframe.addEventListener('mozbrowserloadend', function on(e) {
+          iframe.removeEventListener('mozbrowserloadend', on);
+          onWindowReady();
+        });
+      } else {
+        onWindowReady();
+      }
+    } else if (animationName.indexOf('closeApp') !== -1) {
+      windowClosed(frame);
+
+      setTimeout(closeCallback);
+      closeCallback = null;
+
+      setCloseFrame(null);
+
+      ensureHomescreen().classList.remove('zoom-out');
+    }
+  });
+
   windows.addEventListener('transitionend', function frameTransitionend(evt) {
     var prop = evt.propertyName;
     var frame = evt.target;
@@ -371,42 +415,6 @@ var WindowManager = (function() {
         setOpenFrame(null);
         screenElement.classList.remove('switch-app');
       }
-
-      return;
-    }
-
-    if (classList.contains('opening')) {
-      windowScaled(frame);
-
-      var onWindowReady = function() {
-        windowOpened(frame);
-
-        setTimeout(openCallback);
-        openCallback = null;
-        setOpenFrame(null);
-      };
-
-      // If this is a cold launch let's wait for the app to load first
-      var iframe = openFrame.firstChild;
-      if ('unpainted' in iframe.dataset) {
-
-        if ('wrapper' in frame.dataset)
-          wrapperFooter.classList.add('visible');
-
-        iframe.addEventListener('mozbrowserloadend', function on(e) {
-          iframe.removeEventListener('mozbrowserloadend', on);
-          onWindowReady();
-        });
-      } else {
-        onWindowReady();
-      }
-    } else if (classList.contains('closing')) {
-      windowClosed(frame);
-
-      setTimeout(closeCallback);
-      closeCallback = null;
-
-      setCloseFrame(null);
     }
   });
 
@@ -747,6 +755,7 @@ var WindowManager = (function() {
       transitionOpenCallback = null;
 
       if (!screenElement.classList.contains('switch-app')) {
+        ensureHomescreen().classList.add('zoom-in');
         openFrame.classList.add('opening');
       } else if (!openFrame.classList.contains('opening')) {
         openFrame.classList.add('opening-card');
@@ -852,6 +861,7 @@ var WindowManager = (function() {
       transitionCloseCallback = null;
 
       // Start the transition
+      ensureHomescreen().classList.add('zoom-out');
       closeFrame.classList.add('closing');
       closeFrame.classList.remove('active');
 
@@ -1638,20 +1648,36 @@ var WindowManager = (function() {
         if (!AttentionScreen.isVisible())
           return;
       case 'attentionscreenshow':
-        if (evt.detail && evt.detail.origin &&
-          evt.detail.origin != displayedApp) {
-            attentionScreenTimer = setTimeout(function setVisibility() {
-              if (inlineActivityFrames.length) {
-                setVisibilityForInlineActivity(false);
-              } else {
-                setVisibilityForCurrentApp(false);
-              }
-            }, 3000);
+        var detail = evt.detail;
+        if (detail && detail.origin && detail.origin != displayedApp) {
+          attentionScreenTimer = setTimeout(function setVisibility() {
+            if (inlineActivityFrames.length) {
+              setVisibilityForInlineActivity(false);
+            } else {
+              setVisibilityForCurrentApp(false);
+            }
+          }, 3000);
 
-            // Immediatly blur the frame in order to ensure hiding the keyboard
-            var app = runningApps[displayedApp];
-            if (app)
+          // Instantly blur the frame in order to ensure hiding the keyboard
+          var app = runningApps[displayedApp];
+          if (app) {
+            if ('contentWindow' in app.iframe) {
+              // Bug 845661 - Attention screen does not appears when
+              // the url bar input is focused.
+              // Calling app.iframe.blur() on an in-process window
+              // seems to triggers heavy tasks that froze the main
+              // process for a while and seems to expose a gecko
+              // repaint issue.
+              // So since the only in-process frame is the browser app
+              // let's switch it's visibility as soon as possible when
+              // there is an attention screen and delegate the
+              // responsibility to blur the possible focused elements
+              // itself.
+              app.iframe.setVisible(false);
+            } else {
               app.iframe.blur();
+            }
+          }
         }
         break;
 
@@ -2066,6 +2092,7 @@ var WindowManager = (function() {
       // to relaunch to activity caller, and this is the only way to
       // determine if we are going to homescreen or the original app.
       activityCallerOrigin = '';
+      ensureHomescreen().classList.remove('zoom-in');
       setDisplayedApp(homescreen);
     } else {
       stopInlineActivity(true);

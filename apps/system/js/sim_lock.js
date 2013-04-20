@@ -26,6 +26,12 @@ var SimLock = {
   handleEvent: function sl_handleEvent(evt) {
     switch (evt.type) {
       case 'unlock':
+        // Check whether the lock screen was unlocked from the camera or not.
+        // If the former is true, the SIM PIN dialog should not displayed after
+        // unlock, because the camera will be opened (Bug 849718)
+        if (evt.detail && evt.detail.areaCamera)
+          return;
+
         this.showIfLocked();
         break;
       case 'appwillopen':
@@ -47,6 +53,13 @@ var SimLock = {
         // Ignore apps that don't require a mobile connection
         if (!('telephony' in app.manifest.permissions ||
               'sms' in app.manifest.permissions))
+          return;
+
+        // If the Settings app will open, don't prompt for SIM PIN entry
+        // although it has 'telephony' permission (Bug 861206)
+        var settingsManifestURL =
+          'app://settings.gaiamobile.org/manifest.webapp';
+        if (app.manifestURL == settingsManifestURL)
           return;
 
         // Ignore second 'appwillopen' event when showIfLocked eventually opens
