@@ -38,7 +38,7 @@ var MockNavigatormozMobileMessage = {
     }
   },
 
-  getMessages: function(filter, invert) {
+  getMessages: function(filter, options) {
     this._mMessagesRequest = {};
     return this._mMessagesRequest;
   },

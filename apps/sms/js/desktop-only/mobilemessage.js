@@ -1099,12 +1099,14 @@
   //  - error: Error information, if any (null otherwise)
   //  - onerror: Function that may be set by the suer. If set, will be invoked
   //    in the event of a failure
-  MockNavigatormozMobileMessage.getThreads = function() {
+  MockNavigatormozMobileMessage.getThreads = function(options) {
+    var reverse = (options && options.reverse) ? options.reverse : false;
     var request = {
       error: null
     };
     var threads = messagesDb.threads.slice();
-    var idx = 0;
+    var idx = reverse ? threads.length - 1 : 0;
+    var nextInc = reverse ? -1 : 1;
     var len, continueCursor;
 
     len = threads.length;
@@ -1122,7 +1124,7 @@
         }
       } else {
         request.result = threads[idx];
-        idx += 1;
+        idx += nextInc;
         request.continue = continueCursor;
         if (typeof request.onsuccess === 'function') {
           request.onsuccess.call(request);
@@ -1177,14 +1179,15 @@
   // Parameters:
   //  - filter: object specifying any optional criteria by which to filter
   //    results
-  //  - reverse: Boolean that controls message ordering
+  //  - options: An options object currently containing only a paramter that
+  //             controls message ordering
   // Returns: request object
   //  - error: Error information, if any (null otherwise)
   //  - onsuccess: Function that may be set by the user. If set, will be
   //    invoked in the event of a success
   //  - onerror: Function that may be set by the suer. If set, will be invoked
   //    in the event of a failure
-  MockNavigatormozMobileMessage.getMessages = function(filter, reverse) {
+  MockNavigatormozMobileMessage.getMessages = function(filter, options) {
     var request = {
       error: null
     };
@@ -1209,13 +1212,13 @@
     }
 
     // Sort according to timestamp
-    if (!reverse) {
+    if (options && options.reverse) {
       msgs.sort(function(a, b) {
-        return b.timestamp - a.timestamp;
+        return a.timestamp - b.timestamp;
       });
     } else {
       msgs.sort(function(a, b) {
-        return a.timestamp - b.timestamp;
+        return b.timestamp - a.timestamp;
       });
     }
 

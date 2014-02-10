@@ -365,7 +365,7 @@ var MessageManager = {
     }
     */
 
-    var cursor = this._mozMobileMessage.getThreads();
+    var cursor = this._mozMobileMessage.getThreads({ reverse: true });
 
     var each = options.each;
     var end = options.end;
@@ -426,7 +426,8 @@ var MessageManager = {
     var end = options.end;
     var endArgs = options.endArgs;
     var done = options.done;
-    var cursor = this._mozMobileMessage.getMessages(filter, !invert);
+    var cursor = this._mozMobileMessage.getMessages(filter,
+                                                    { reverse: !invert});
 
     cursor.onsuccess = function onsuccess() {
       if (!this.done) {
