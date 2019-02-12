@@ -335,7 +335,7 @@ endif
 XPCSHELLSDK := $(abspath $(XULRUNNER_DIRECTORY)/b2g/xpcshell)
 endif
 
-B2G_SDK_URL_BASE := http://ftp.mozilla.org/pub/mozilla.org/b2g/nightly/$(B2G_SDK_DATE)-mozilla-central
+B2G_SDK_URL_BASE := ftp://ftp.kaiostech.com/$(ARCH)/
 B2G_SDK_FILE_NAME := b2g-$(B2G_SDK_VERSION).multi.$(B2G_SDK_OS).$(B2G_SDK_EXT)
 B2G_SDK_URL := $(B2G_SDK_URL_BASE)/$(B2G_SDK_FILE_NAME)
 B2G_SDK_URL_FILE := $(XULRUNNER_DIRECTORY)/.b2g.url
